@@ -1,0 +1,1822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GenLayer Maze Run — Dfwkim</title>
+<style>
+  :root {
+    --bg-deep: #0a0e14;
+    --bg-panel: #11161f;
+    --bg-panel-2: #161d29;
+    --line: #2a3344;
+    --accent: #00e5a0;
+    --accent-dim: #00a878;
+    --accent-glow: rgba(0, 229, 160, 0.35);
+    --wall: #e9edf3;
+    --wall-locked: #ff5d72;
+    --text-hi: #f3f6fb;
+    --text-lo: #8b96a8;
+    --gold: #ffd166;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg-deep);
+    color: var(--text-hi);
+    font-family: 'Space Grotesk', 'Segoe UI', system-ui, sans-serif;
+    overflow-x: hidden;
+  }
+
+  @font-face {
+    font-family: 'Space Grotesk';
+    src: local('Space Grotesk');
+  }
+
+  .stars {
+    position: fixed;
+    inset: 0;
+    background-image:
+      radial-gradient(1px 1px at 20px 30px, rgba(255,255,255,0.25), transparent),
+      radial-gradient(1px 1px at 140px 90px, rgba(255,255,255,0.2), transparent),
+      radial-gradient(1.5px 1.5px at 250px 50px, rgba(255,255,255,0.18), transparent),
+      radial-gradient(1px 1px at 320px 160px, rgba(255,255,255,0.22), transparent),
+      radial-gradient(1.5px 1.5px at 400px 220px, rgba(255,255,255,0.15), transparent);
+    background-repeat: repeat;
+    background-size: 480px 320px;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.6;
+  }
+
+  .app {
+    position: relative;
+    z-index: 1;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 28px 24px 60px;
+  }
+
+  /* ---------- HEADER ---------- */
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 18px;
+    margin-bottom: 22px;
+  }
+
+  .brand-block {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .brand-eyebrow {
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-lo);
+  }
+
+  .brand-title {
+    font-size: 34px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--text-hi);
+    line-height: 1.1;
+  }
+
+  .brand-title span {
+    color: var(--accent);
+  }
+
+  .brand-sub {
+    font-size: 15px;
+    color: var(--accent);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+
+  .stat-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .stat-chip {
+    background: var(--bg-panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 16px;
+    min-width: 92px;
+    text-align: center;
+  }
+
+  .stat-chip .num {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-hi);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .stat-chip .lbl {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-lo);
+    margin-top: 2px;
+  }
+
+  /* ---------- LAYOUT: maze top-right, controls + log stacked left ---------- */
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 460px;
+    grid-template-areas:
+      "controls maze"
+      "log       maze";
+    gap: 22px;
+    align-items: start;
+  }
+
+  .maze-col { grid-area: maze; }
+  .controls-col { grid-area: controls; }
+  .log-col { grid-area: log; }
+
+  @media (max-width: 920px) {
+    .layout {
+      grid-template-columns: 1fr;
+      grid-template-areas:
+        "maze"
+        "controls"
+        "log";
+    }
+  }
+
+  .controls-col,
+  .log-col {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 20px;
+  }
+
+  .panel h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-lo);
+    margin: 0 0 12px;
+    font-weight: 600;
+  }
+
+  .log {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 360px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+
+  .log-entry {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-lo);
+    border-left: 2px solid var(--line);
+    padding-left: 10px;
+  }
+  .log-entry.good { border-color: var(--accent); color: var(--text-hi); }
+  .log-entry.bad { border-color: var(--wall-locked); color: var(--text-hi); }
+  .log-entry.info { border-color: var(--gold); color: var(--text-hi); }
+
+  .controls-hint {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 14px;
+  }
+
+  .key {
+    background: var(--bg-panel-2);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+    color: var(--text-lo);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .dpad {
+    display: grid;
+    grid-template-columns: 48px 48px 48px;
+    grid-template-rows: 48px 48px 48px;
+    gap: 6px;
+    margin-top: 14px;
+    justify-content: center;
+  }
+
+  .dpad button {
+    background: var(--bg-panel-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    color: var(--text-hi);
+    font-size: 18px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .dpad button:hover { border-color: var(--accent); color: var(--accent); }
+  .dpad button:active { transform: scale(0.94); }
+  .dpad .up { grid-column: 2; grid-row: 1; }
+  .dpad .left { grid-column: 1; grid-row: 2; }
+  .dpad .down { grid-column: 2; grid-row: 2; }
+  .dpad .right { grid-column: 3; grid-row: 2; }
+
+  /* ---------- MAZE PANEL (top-right) ---------- */
+  .maze-col {
+    position: sticky;
+    top: 20px;
+  }
+
+  @media (max-width: 920px) {
+    .maze-col { position: static; }
+  }
+
+  .maze-panel {
+    background: linear-gradient(180deg, #131a26 0%, #0d121b 100%);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 14px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .maze-panel::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 85% 8%, rgba(120,140,180,0.12), transparent 40%),
+      radial-gradient(circle at 10% 95%, rgba(20,60,80,0.18), transparent 45%);
+    pointer-events: none;
+  }
+
+  .maze-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .maze-title-row .label {
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-lo);
+  }
+
+  .maze-title-row .progress {
+    font-size: 12px;
+    color: var(--accent);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  canvas#mazeCanvas {
+    display: block;
+    width: 100%;
+    border-radius: 10px;
+    position: relative;
+    z-index: 1;
+    background: #0a0f17;
+  }
+
+  /* ---------- GATE MODAL ---------- */
+  .gate-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(6, 9, 14, 0.78);
+    backdrop-filter: blur(4px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    padding: 20px;
+  }
+  .gate-overlay.show { display: flex; }
+
+  .gate-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--accent-dim);
+    box-shadow: 0 0 0 1px rgba(0,229,160,0.08), 0 24px 60px rgba(0,0,0,0.5);
+    border-radius: 18px;
+    max-width: 480px;
+    width: 100%;
+    padding: 28px;
+    animation: gateIn 0.25s ease;
+  }
+
+  @keyframes gateIn {
+    from { opacity: 0; transform: translateY(10px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .gate-eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+
+  .gate-question {
+    font-size: 19px;
+    line-height: 1.4;
+    color: var(--text-hi);
+    margin-bottom: 20px;
+    font-weight: 600;
+  }
+
+  .gate-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .gate-option {
+    background: var(--bg-panel-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 13px 16px;
+    text-align: left;
+    color: var(--text-hi);
+    font-size: 15px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .gate-option:hover { border-color: var(--accent); background: #1a2230; }
+  .gate-option.correct { border-color: var(--accent); background: rgba(0,229,160,0.12); }
+  .gate-option.wrong { border-color: var(--wall-locked); background: rgba(255,93,114,0.12); }
+  .gate-option:disabled { cursor: default; }
+
+  .gate-feedback {
+    margin-top: 16px;
+    font-size: 14px;
+    color: var(--text-lo);
+    min-height: 20px;
+  }
+  .gate-feedback.good { color: var(--accent); }
+  .gate-feedback.bad { color: var(--wall-locked); }
+
+  .gate-continue {
+    margin-top: 16px;
+    width: 100%;
+    background: var(--accent);
+    color: #06251c;
+    border: none;
+    border-radius: 10px;
+    padding: 12px;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    display: none;
+  }
+  .gate-continue.show { display: block; }
+
+  /* ---------- WIN MODAL ---------- */
+  .win-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(6, 9, 14, 0.85);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 60;
+    padding: 20px;
+  }
+  .win-overlay.show { display: flex; }
+  .win-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--accent);
+    border-radius: 18px;
+    max-width: 440px;
+    width: 100%;
+    padding: 36px 28px;
+    text-align: center;
+  }
+  .win-card .star { font-size: 48px; margin-bottom: 10px; }
+  .win-card h3 { font-size: 24px; margin: 0 0 8px; color: var(--accent); }
+  .win-card p { color: var(--text-lo); font-size: 14px; margin: 0 0 20px; line-height: 1.5; }
+  .win-card button {
+    background: var(--accent);
+    color: #06251c;
+    border: none;
+    border-radius: 10px;
+    padding: 12px 24px;
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 14px;
+  }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<div class="stars"></div>
+
+<div class="app">
+
+  <div class="topbar">
+    <div class="brand-block">
+      <div class="brand-eyebrow">community quest</div>
+      <div class="brand-title">gen<span>layer</span> maze run</div>
+      <div class="brand-sub">Dfwkim</div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-chip">
+        <div class="num" id="statSteps">0</div>
+        <div class="lbl">Steps</div>
+      </div>
+      <div class="stat-chip">
+        <div class="num" id="statGates">0/6</div>
+        <div class="lbl">Gates</div>
+      </div>
+      <div class="stat-chip">
+        <div class="num" id="statSetbacks">0</div>
+        <div class="lbl">Setbacks</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="layout">
+
+    <div class="maze-col">
+      <div class="maze-panel">
+        <div class="maze-title-row">
+          <span class="label">Live map</span>
+          <span class="progress" id="progressLabel">0% to goal</span>
+        </div>
+        <canvas id="mazeCanvas" width="430" height="430"></canvas>
+      </div>
+    </div>
+
+    <div class="controls-col">
+      <div class="panel">
+        <h2>Controls</h2>
+        <div class="controls-hint">
+          <span class="key">↑ / W</span>
+          <span class="key">↓ / S</span>
+          <span class="key">← / A</span>
+          <span class="key">→ / D</span>
+        </div>
+        <div class="dpad">
+          <button class="up" data-dir="N">↑</button>
+          <button class="left" data-dir="W">←</button>
+          <button class="down" data-dir="S">↓</button>
+          <button class="right" data-dir="E">→</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="log-col">
+      <div class="panel">
+        <h2>Mission log</h2>
+        <div class="log" id="logFeed">
+          <div class="log-entry info">Mochi is dropped at the maze entrance. Reach the star to complete the run. Trivia gates block six points along the way — answer right to pass, answer wrong and the route behind you seals shut while a new one opens.</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<div class="gate-overlay" id="gateOverlay">
+  <div class="gate-card">
+    <div class="gate-eyebrow">Trivia gate · Pass to continue</div>
+    <div class="gate-question" id="gateQuestion">Loading question…</div>
+    <div class="gate-options" id="gateOptions"></div>
+    <div class="gate-feedback" id="gateFeedback"></div>
+    <button class="gate-continue" id="gateContinueBtn">Continue</button>
+  </div>
+</div>
+
+<div class="win-overlay" id="winOverlay">
+  <div class="win-card">
+    <div class="star">⭐</div>
+    <h3>Run complete!</h3>
+    <p id="winSummary">You guided Mochi through the maze and cleared every gate.</p>
+    <button id="restartBtn">Run it again</button>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   GENLAYER MAZE RUN
+   - Perfect maze (recursive backtracker) -> exactly one true path
+   - 6 trivia gates placed along that path
+   - Wrong answer: walk back a few cells, seal that crossing,
+     carve one fresh connection elsewhere so exactly one path
+     forward exists again
+   ========================================================= */
+
+/* ─── SOUND ENGINE ──────────────────────────────────────
+   All sounds procedural via Web Audio API.
+   Selections: Move=Soft tap, Gate=Gate chime, Correct=Sparkle burst,
+   Wrong=Double thud, Setback=Rewind blip, Reroute=Crumble pop, Win=Star burst
+   ──────────────────────────────────────────────────────── */
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+const masterVol = audioCtx.createGain();
+masterVol.gain.value = 0.7;
+masterVol.connect(audioCtx.destination);
+
+function resumeAudio() {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+const SFX = {
+  // 👣 Move — Soft tap
+  move() {
+    resumeAudio();
+    const now = audioCtx.currentTime;
+    const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.08, audioCtx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++)
+      d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (d.length * 0.12));
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    const f = audioCtx.createBiquadFilter();
+    f.type = 'bandpass'; f.frequency.value = 900; f.Q.value = 1.2;
+    const g = audioCtx.createGain(); g.gain.value = 0.45;
+    src.connect(f); f.connect(g); g.connect(masterVol);
+    src.start(now);
+  },
+
+  // 🔒 Gate locked — Gate chime
+  gate() {
+    resumeAudio();
+    const now = audioCtx.currentTime;
+    [523, 659, 784].forEach((f, i) => {
+      const osc = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      osc.type = 'triangle'; osc.frequency.value = f;
+      g.gain.setValueAtTime(0.15, now + i * 0.1);
+      g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.1 + 0.5);
+      osc.connect(g); g.connect(masterVol);
+      osc.start(now + i * 0.1); osc.stop(now + i * 0.1 + 0.55);
+    });
+  },
+
+  // ✅ Correct — Sparkle burst
+  correct() {
+    resumeAudio();
+    const now = audioCtx.currentTime;
+    [800, 1000, 1200, 1500, 1800].forEach((f, i) => {
+      const osc = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      osc.type = 'sine'; osc.frequency.value = f;
+      const t = now + i * 0.055;
+      g.gain.setValueAtTime(0.18, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+      osc.connect(g); g.connect(masterVol);
+      osc.start(t); osc.stop(t + 0.28);
+    });
+  },
+
+  // ❌ Wrong — Double thud
+  wrong() {
+    resumeAudio();
+    const now = audioCtx.currentTime;
+    [0, 0.18].forEach(t => {
+      const osc = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(180, now + t);
+      osc.frequency.exponentialRampToValueAtTime(40, now + t + 0.15);
+      g.gain.setValueAtTime(0.35, now + t);
+      g.gain.exponentialRampToValueAtTime(0.001, now + t + 0.2);
+      osc.connect(g); g.connect(masterVol);
+      osc.start(now + t); osc.stop(now + t + 0.22);
+    });
+  },
+
+  // ↩️ Setback — Rewind blip
+  setback() {
+    resumeAudio();
+    const now = audioCtx.currentTime;
+    [0, 0.07, 0.14].forEach((t, i) => {
+      const osc = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = 400 - i * 80;
+      g.gain.setValueAtTime(0.18, now + t);
+      g.gain.exponentialRampToValueAtTime(0.001, now + t + 0.06);
+      osc.connect(g); g.connect(masterVol);
+      osc.start(now + t); osc.stop(now + t + 0.07);
+    });
+  },
+
+  // ✨ New route — Crumble pop
+  reroute() {
+    resumeAudio();
+    const now = audioCtx.currentTime;
+    for (let i = 0; i < 6; i++) {
+      const t = now + i * 0.04;
+      const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.05, audioCtx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let j = 0; j < d.length; j++)
+        d[j] = (Math.random() * 2 - 1) * Math.exp(-j / (d.length * 0.3));
+      const src = audioCtx.createBufferSource(); src.buffer = buf;
+      const f = audioCtx.createBiquadFilter();
+      f.type = 'highpass'; f.frequency.value = 800 + i * 200;
+      const g = audioCtx.createGain(); g.gain.value = 0.25 - i * 0.03;
+      src.connect(f); f.connect(g); g.connect(masterVol);
+      src.start(t);
+    }
+  },
+
+  // ⭐ Win — Star burst
+  win() {
+    resumeAudio();
+    const now = audioCtx.currentTime;
+    for (let i = 0; i < 10; i++) {
+      const t = now + i * 0.05;
+      const osc = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      osc.type = 'sine'; osc.frequency.value = 600 + i * 120;
+      g.gain.setValueAtTime(0.18, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+      osc.connect(g); g.connect(masterVol);
+      osc.start(t); osc.stop(t + 0.38);
+    }
+  }
+};
+/* ─── END SOUND ENGINE ──────────────────────────────── */
+
+const COLS = 12, ROWS = 10;
+let grid, startCell, endCell, truePath, gates, currentGateIndex;
+let playerPos, visitedTrail;
+let stepCount = 0, setbackCount = 0, gatesCleared = 0;
+let awaitingGate = false;
+
+const QUESTION_BANK = [
+
+  /* ── BASICS: What is GenLayer ── */
+  {
+    q: "What is GenLayer at its core?",
+    options: [
+      "A Layer-1 blockchain that lets smart contracts use AI to process real-world, non-deterministic data",
+      "A crypto exchange for trading tokens",
+      "A Layer-2 rollup built on top of Ethereum",
+      "A decentralized social media platform"
+    ],
+    correct: 0
+  },
+  {
+    q: "What major limitation of traditional blockchains does GenLayer solve?",
+    options: [
+      "High gas fees on Ethereum",
+      "Smart contracts being unable to access or reason about real-world, off-chain information",
+      "The lack of NFT support on older chains",
+      "Slow transaction confirmation times only"
+    ],
+    correct: 1
+  },
+  {
+    q: "How does GenLayer differ from a regular blockchain like Ethereum?",
+    options: [
+      "It uses proof-of-work mining",
+      "Its contracts can call AI/LLMs to understand and reason about real-world data",
+      "It doesn't support tokens or assets",
+      "It only runs on mobile devices"
+    ],
+    correct: 1
+  },
+  {
+    q: "What does 'non-deterministic' mean in the context of blockchain?",
+    options: [
+      "The blockchain runs without electricity",
+      "Two validators running the same task may get slightly different but equally valid outputs",
+      "Transactions are randomly deleted",
+      "Miners decide which transactions are valid"
+    ],
+    correct: 1
+  },
+  {
+    q: "Why can't traditional smart contracts access live data like news or prices directly?",
+    options: [
+      "They are too expensive to run",
+      "Blockchains are deterministic closed systems — all nodes must compute the same result from the same inputs",
+      "Smart contracts don't support numbers",
+      "The internet is too slow for blockchains"
+    ],
+    correct: 1
+  },
+  {
+    q: "What layer of the blockchain stack does GenLayer operate on?",
+    options: [
+      "Layer 0 (networking layer)",
+      "Layer 1 (its own base blockchain)",
+      "Layer 2 (a rollup on Ethereum)",
+      "Layer 3 (application layer only)"
+    ],
+    correct: 1
+  },
+
+  /* ── INTELLIGENT CONTRACTS ── */
+  {
+    q: "What are Intelligent Contracts?",
+    options: [
+      "Smart contracts that self-delete after use",
+      "GenLayer's smart contracts that can use LLMs to process subjective or real-world tasks",
+      "Contracts that only work with stablecoins",
+      "NFT contracts with built-in royalties"
+    ],
+    correct: 1
+  },
+  {
+    q: "Which language are Intelligent Contracts written in?",
+    options: [
+      "Solidity",
+      "Rust",
+      "Python",
+      "JavaScript"
+    ],
+    correct: 2
+  },
+  {
+    q: "What can an Intelligent Contract do that a regular Ethereum smart contract cannot?",
+    options: [
+      "Hold tokens",
+      "Browse the web and use AI reasoning to evaluate real-world conditions before executing",
+      "Emit events on-chain",
+      "Accept ETH payments"
+    ],
+    correct: 1
+  },
+  {
+    q: "Give a real-world example of a task only an Intelligent Contract could handle.",
+    options: [
+      "Sending 1 ETH to an address",
+      "Checking whether a news headline is accurate before releasing funds",
+      "Minting an NFT with a fixed image",
+      "Counting votes where each vote = 1 token"
+    ],
+    correct: 1
+  },
+  {
+    q: "What runtime environment executes Intelligent Contracts on GenLayer?",
+    options: [
+      "The Ethereum Virtual Machine (EVM)",
+      "The GenVM (GenLayer Virtual Machine)",
+      "The JVM (Java Virtual Machine)",
+      "WASM (WebAssembly)"
+    ],
+    correct: 1
+  },
+  {
+    q: "What makes Intelligent Contracts 'intelligent'?",
+    options: [
+      "They are written by AI",
+      "They can call LLMs during execution to reason, classify, or verify real-world information",
+      "They automatically upgrade themselves",
+      "They run faster than normal contracts"
+    ],
+    correct: 1
+  },
+
+  /* ── EQUIVALENCE PRINCIPLE ── */
+  {
+    q: "What does the Equivalence Principle in GenLayer primarily let validators do?",
+    options: [
+      "Reach consensus on subjective or non-deterministic outputs",
+      "Mine new GEN tokens faster",
+      "Compress transaction data for cheaper gas",
+      "Encrypt validator identities"
+    ],
+    correct: 0
+  },
+  {
+    q: "What problem does the Equivalence Principle solve?",
+    options: [
+      "It lets validators agree even when AI outputs differ slightly but mean the same thing",
+      "It forces every validator to produce the exact same byte string",
+      "It removes the need for validators entirely",
+      "It only works for numeric outputs"
+    ],
+    correct: 0
+  },
+  {
+    q: "Without the Equivalence Principle, what would happen if validators used AI to evaluate 'Is this claim true?'",
+    options: [
+      "They'd all give identical answers automatically",
+      "Slight wording differences in AI outputs could prevent consensus from ever being reached",
+      "The contract would just skip the AI call",
+      "Only one validator would run the AI"
+    ],
+    correct: 1
+  },
+  {
+    q: "The Equivalence Principle is best compared to which real-world concept?",
+    options: [
+      "A spell-checker",
+      "Judges at a competition scoring independently and comparing results rather than copy-pasting from one sheet",
+      "A search engine ranking results",
+      "A GPS calculating the fastest route"
+    ],
+    correct: 1
+  },
+  {
+    q: "Which type of task benefits most from the Equivalence Principle?",
+    options: [
+      "Calculating 2 + 2",
+      "Evaluating whether a piece of text expresses positive or negative sentiment",
+      "Checking if an address has more than 0 ETH",
+      "Counting the number of transactions in a block"
+    ],
+    correct: 1
+  },
+
+  /* ── VALIDATORS ── */
+  {
+    q: "In GenLayer, what's the core job of a validator node?",
+    options: [
+      "Sell ad space on the network",
+      "Execute Intelligent Contracts and reach consensus on their outputs",
+      "Host the project's Discord server",
+      "Design the community NFT art"
+    ],
+    correct: 1
+  },
+  {
+    q: "How many validators typically participate in evaluating a single transaction on GenLayer?",
+    options: [
+      "Just one (the contract owner)",
+      "A randomly selected committee of multiple validators",
+      "Every node on the network simultaneously",
+      "Zero — it's automated"
+    ],
+    correct: 1
+  },
+  {
+    q: "What happens if a validator's AI output disagrees with the majority?",
+    options: [
+      "The validator is immediately banned",
+      "The Equivalence Principle determines if the disagreement is meaningful or just a superficial wording difference",
+      "The transaction is cancelled immediately",
+      "A new election of validators is held"
+    ],
+    correct: 1
+  },
+  {
+    q: "What is the 'leader' validator responsible for in a GenLayer transaction?",
+    options: [
+      "Collecting fees from users",
+      "Proposing the initial execution result that other validators then verify",
+      "Writing the smart contract code",
+      "Broadcasting news about the transaction"
+    ],
+    correct: 1
+  },
+  {
+    q: "Why does GenLayer use multiple validators per transaction rather than just one?",
+    options: [
+      "To make things slower on purpose",
+      "To prevent any single node from manipulating the AI output — multiple independent checks ensure honesty",
+      "Because AI only works in groups",
+      "To reduce gas costs"
+    ],
+    correct: 1
+  },
+
+  /* ── STANDARDS: x402 ── */
+  {
+    q: "What does x402 add to GenLayer's ecosystem?",
+    options: [
+      "A new consensus algorithm",
+      "On-chain governance voting",
+      "A standard for machine-readable payments triggered over HTTP",
+      "A layer-2 scaling rollup"
+    ],
+    correct: 2
+  },
+  {
+    q: "What HTTP status code inspired the name 'x402'?",
+    options: [
+      "404 (Not Found)",
+      "402 (Payment Required)",
+      "200 (OK)",
+      "500 (Server Error)"
+    ],
+    correct: 1
+  },
+  {
+    q: "Why is x402 especially useful for AI agents?",
+    options: [
+      "It lets agents design their own tokens",
+      "It allows agents to pay for services automatically over HTTP without human involvement",
+      "It gives agents voting rights on governance",
+      "It makes agents run faster"
+    ],
+    correct: 1
+  },
+  {
+    q: "What real-world integration uses x402 alongside GenLayer?",
+    options: [
+      "OpenAI's GPT store",
+      "Apolo — enabling x402-based payments for agent services",
+      "Uniswap liquidity pools",
+      "Chainlink price feeds"
+    ],
+    correct: 1
+  },
+  {
+    q: "What kind of payment does x402 standardize?",
+    options: [
+      "Credit card payments via Stripe",
+      "Stablecoin or crypto micropayments embedded in HTTP API calls",
+      "Bank wire transfers",
+      "PayPal checkout flows"
+    ],
+    correct: 1
+  },
+
+  /* ── STANDARDS: ERC-8004 ── */
+  {
+    q: "What is ERC-8004 generally associated with in the GenLayer/agent ecosystem?",
+    options: [
+      "NFT royalty splitting",
+      "Trust and identity standards for autonomous AI agents",
+      "A new gas token standard",
+      "Cross-chain bridging of stablecoins"
+    ],
+    correct: 1
+  },
+  {
+    q: "Why do autonomous agents need an identity/trust standard like ERC-8004?",
+    options: [
+      "So they can post on social media",
+      "So other agents and contracts can verify who they're dealing with and whether to trust them",
+      "So they can mine tokens",
+      "So they can avoid paying gas fees"
+    ],
+    correct: 1
+  },
+  {
+    q: "ERC-8004 is most relevant to which emerging trend?",
+    options: [
+      "Play-to-earn gaming",
+      "Agentic AI — where software agents act, transact, and coordinate autonomously",
+      "NFT profile pictures",
+      "DeFi yield farming"
+    ],
+    correct: 1
+  },
+
+  /* ── STANDARDS: A2A ── */
+  {
+    q: "What does A2A stand for in the context of agent ecosystems like GenLayer's?",
+    options: [
+      "Agent-to-Agent communication between autonomous agents",
+      "Asset-to-Asset transfer protocol",
+      "Auction-to-Auction bidding system",
+      "API-to-API gateway"
+    ],
+    correct: 0
+  },
+  {
+    q: "Why would an Agent-to-Agent (A2A) standard matter for GenLayer?",
+    options: [
+      "It lets autonomous agents coordinate and transact without humans manually bridging them",
+      "It speeds up block confirmation times only",
+      "It replaces the need for any smart contracts",
+      "It's used purely for marketing analytics"
+    ],
+    correct: 0
+  },
+  {
+    q: "Which combination of standards makes fully autonomous agent economies possible on GenLayer?",
+    options: [
+      "Only ERC-20 is needed",
+      "A2A (communication) + x402 (payments) + ERC-8004 (identity) working together",
+      "Just MCP alone",
+      "Traditional REST APIs"
+    ],
+    correct: 1
+  },
+
+  /* ── STANDARDS: MCP ── */
+  {
+    q: "What is MCP (Model Context Protocol) used for?",
+    options: [
+      "Mining cryptocurrency more efficiently",
+      "Standardizing how AI models connect to external tools and data sources",
+      "Managing community polls in Discord",
+      "Compressing blockchain state snapshots"
+    ],
+    correct: 1
+  },
+  {
+    q: "Who created the Model Context Protocol (MCP)?",
+    options: [
+      "Google",
+      "Anthropic",
+      "GenLayer core team",
+      "OpenAI"
+    ],
+    correct: 1
+  },
+  {
+    q: "Why is MCP relevant to GenLayer's Intelligent Contracts?",
+    options: [
+      "It allows GenLayer validators to mine faster",
+      "It gives Intelligent Contracts a standardized way to plug into external AI tools and data sources",
+      "It replaces the GenVM",
+      "It handles token swaps"
+    ],
+    correct: 1
+  },
+
+  /* ── GENVM ── */
+  {
+    q: "What is the GenVM?",
+    options: [
+      "A graphics card optimized for crypto mining",
+      "The virtual machine that executes GenLayer's Intelligent Contracts",
+      "A governance voting module",
+      "A cross-chain bridge"
+    ],
+    correct: 1
+  },
+  {
+    q: "What makes the GenVM different from the EVM (Ethereum Virtual Machine)?",
+    options: [
+      "The GenVM is slower",
+      "The GenVM can call LLMs during contract execution, enabling AI-powered logic",
+      "The GenVM only supports NFTs",
+      "The GenVM requires Solidity code"
+    ],
+    correct: 1
+  },
+  {
+    q: "When a GenVM contract calls an LLM, what kind of task might it be performing?",
+    options: [
+      "Generating images for NFTs",
+      "Reasoning about whether a real-world condition (like a news event) has occurred",
+      "Converting ETH to USD",
+      "Sending emails to users"
+    ],
+    correct: 1
+  },
+
+  /* ── COMMUNITY & ECOSYSTEM ── */
+  {
+    q: "What community mascot represents GenLayer's brand identity?",
+    options: ["Mochi", "Doge", "Pepe", "Shiba"],
+    correct: 0
+  },
+  {
+    q: "What is a 'GenFren'?",
+    options: [
+      "A type of GenLayer validator",
+      "A community member or supporter of the GenLayer ecosystem",
+      "A GenLayer governance token",
+      "A type of Intelligent Contract"
+    ],
+    correct: 1
+  },
+  {
+    q: "What is the Neurocreative role in the GenLayer community?",
+    options: [
+      "A validator node operator title",
+      "A community content creator who builds educational and creative content for the GenLayer ecosystem",
+      "A core developer of the GenLayer protocol",
+      "An investor in GenLayer's funding rounds"
+    ],
+    correct: 1
+  },
+  {
+    q: "What is GenLayer's brand accent color?",
+    options: [
+      "A bright mint/teal green (#00e5a0)",
+      "Deep crimson red",
+      "Royal purple",
+      "Mustard yellow"
+    ],
+    correct: 0
+  },
+  {
+    q: "What kind of content do Neurocreatives typically produce for GenLayer?",
+    options: [
+      "Financial audits",
+      "Educational threads, explainer tools, infographics, and interactive web content",
+      "Legal documents",
+      "Mining software"
+    ],
+    correct: 1
+  },
+
+  /* ── USE CASES ── */
+  {
+    q: "Which of these is a valid use case for GenLayer's Intelligent Contracts?",
+    options: [
+      "A contract that sends ETH only if a specific sports team wins — verified by reading live news",
+      "A contract that stores a fixed JPEG image",
+      "A contract that calculates 10 * 10",
+      "A contract that manages a static whitelist"
+    ],
+    correct: 0
+  },
+  {
+    q: "How could GenLayer be used in prediction markets?",
+    options: [
+      "By hardcoding all possible outcomes in advance",
+      "Intelligent Contracts can read real-world data to verify if a predicted event actually happened",
+      "By requiring users to manually report outcomes",
+      "By using oracles that vote once a year"
+    ],
+    correct: 1
+  },
+  {
+    q: "How could a GenLayer contract help with content moderation?",
+    options: [
+      "By banning all content automatically",
+      "A contract could use an LLM to evaluate whether submitted text violates defined rules before taking action",
+      "By requiring human moderators to approve each transaction",
+      "Content moderation isn't possible on-chain"
+    ],
+    correct: 1
+  },
+  {
+    q: "What kind of DeFi application becomes possible with Intelligent Contracts?",
+    options: [
+      "Yield farms that reset every hour",
+      "Loan contracts that evaluate a borrower's reputation by reasoning about on-chain + off-chain signals",
+      "NFT drops with random winners",
+      "Simple token swap AMMs"
+    ],
+    correct: 1
+  },
+  {
+    q: "How could GenLayer assist with decentralized fact-checking?",
+    options: [
+      "By having validators vote based on personal opinion",
+      "Intelligent Contracts can query live sources and use AI to assess if a claim is supported by evidence",
+      "By storing Wikipedia snapshots on-chain",
+      "Fact-checking isn't possible in a decentralized system"
+    ],
+    correct: 1
+  },
+
+  /* ── TECHNICAL / DEEPER ── */
+  {
+    q: "What does 'probabilistic finality' mean in systems like GenLayer?",
+    options: [
+      "Transactions are never truly confirmed",
+      "A transaction becomes increasingly certain over time as more validators confirm it",
+      "Only 50% of transactions are valid",
+      "Finality is determined by a random lottery"
+    ],
+    correct: 1
+  },
+  {
+    q: "Why is Python chosen for writing Intelligent Contracts on GenLayer?",
+    options: [
+      "Python is the fastest programming language",
+      "Python has a rich ecosystem for AI/ML libraries, making it natural for AI-integrated contracts",
+      "Python is the only language the GenVM supports",
+      "Python contracts cost less gas"
+    ],
+    correct: 1
+  },
+  {
+    q: "What is a 'leader validator' in GenLayer's consensus process?",
+    options: [
+      "The validator who created the network",
+      "The validator randomly selected to execute the contract first and propose a result for others to verify",
+      "The validator with the most tokens",
+      "The validator who charges the lowest fees"
+    ],
+    correct: 1
+  },
+  {
+    q: "In GenLayer's model, what are 'appeals' in the consensus process?",
+    options: [
+      "Legal complaints filed by users",
+      "A mechanism allowing disputed results to be escalated to a larger validator committee for re-evaluation",
+      "A way to cancel a transaction after it's confirmed",
+      "A marketing campaign for new users"
+    ],
+    correct: 1
+  },
+  {
+    q: "What does it mean for GenLayer to be 'EVM compatible'?",
+    options: [
+      "It only runs Ethereum contracts",
+      "Developers can port existing Ethereum tooling and interact with GenLayer using familiar EVM-based infrastructure",
+      "GenLayer is a fork of Ethereum",
+      "GenLayer uses the same gas token as Ethereum"
+    ],
+    correct: 1
+  },
+  {
+    q: "What role does an LLM play inside a GenLayer Intelligent Contract execution?",
+    options: [
+      "It writes the contract code automatically",
+      "It serves as the reasoning engine that evaluates subjective or complex real-world conditions",
+      "It manages the validator's private keys",
+      "It sends notifications to users"
+    ],
+    correct: 1
+  }
+
+];
+
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+let questionPool = shuffle(QUESTION_BANK);
+let questionPointer = 0;
+function nextQuestion() {
+  if (questionPointer >= questionPool.length) {
+    questionPool = shuffle(QUESTION_BANK);
+    questionPointer = 0;
+  }
+  return questionPool[questionPointer++];
+}
+
+/* ---------------- MAZE GENERATION ---------------- */
+function makeGrid() {
+  const g = [];
+  for (let r = 0; r < ROWS; r++) {
+    const row = [];
+    for (let c = 0; c < COLS; c++) {
+      row.push({ N: true, S: true, E: true, W: true, visited: false });
+    }
+    g.push(row);
+  }
+  return g;
+}
+
+function inBounds(r, c) {
+  return r >= 0 && r < ROWS && c >= 0 && c < COLS;
+}
+
+function carve(g, r, c) {
+  g[r][c].visited = true;
+  const dirs = shuffle(['N', 'S', 'E', 'W']);
+  for (const d of dirs) {
+    let nr = r, nc = c, opp;
+    if (d === 'N') { nr--; opp = 'S'; }
+    if (d === 'S') { nr++; opp = 'N'; }
+    if (d === 'E') { nc++; opp = 'W'; }
+    if (d === 'W') { nc--; opp = 'E'; }
+    if (inBounds(nr, nc) && !g[nr][nc].visited) {
+      g[r][c][d] = false;
+      g[nr][nc][opp] = false;
+      carve(g, nr, nc);
+    }
+  }
+}
+
+function neighborsOf(g, r, c) {
+  const out = [];
+  if (!g[r][c].N && inBounds(r-1,c)) out.push([r-1,c]);
+  if (!g[r][c].S && inBounds(r+1,c)) out.push([r+1,c]);
+  if (!g[r][c].E && inBounds(r,c+1)) out.push([r,c+1]);
+  if (!g[r][c].W && inBounds(r,c-1)) out.push([r,c-1]);
+  return out;
+}
+
+function bfsPath(g, from, to) {
+  const q = [from];
+  const came = new Map();
+  came.set(from.join(','), null);
+  while (q.length) {
+    const cur = q.shift();
+    if (cur[0] === to[0] && cur[1] === to[1]) break;
+    for (const n of neighborsOf(g, cur[0], cur[1])) {
+      const key = n.join(',');
+      if (!came.has(key)) {
+        came.set(key, cur);
+        q.push(n);
+      }
+    }
+  }
+  const path = [];
+  let cur = to;
+  while (cur) {
+    path.push(cur);
+    const key = cur.join(',');
+    cur = came.has(key) ? came.get(key) : null;
+  }
+  path.reverse();
+  return path;
+}
+
+function buildMaze() {
+  grid = makeGrid();
+  startCell = [0, 0];
+  endCell = [ROWS - 1, COLS - 1];
+  carve(grid, startCell[0], startCell[1]);
+  truePath = bfsPath(grid, startCell, endCell);
+}
+
+/* place gates at ~even intervals along the true path (skip first/last couple cells) */
+function placeGates() {
+  const usable = truePath.slice(2, truePath.length - 2);
+  const gateCount = 6;
+  const idxs = [];
+  for (let i = 1; i <= gateCount; i++) {
+    idxs.push(Math.floor((i / (gateCount + 1)) * usable.length));
+  }
+  gates = idxs.map((idx, i) => {
+    const cellIdx = idx + 2; // back to truePath indexing
+    return {
+      atPathIndex: cellIdx,
+      cell: truePath[cellIdx],
+      cleared: false,
+      id: i
+    };
+  });
+}
+
+/* ---------------- RENDERING ---------------- */
+const canvas = document.getElementById('mazeCanvas');
+const ctx = canvas.getContext('2d');
+let cellSize;
+
+function resizeCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  const displaySize = canvas.clientWidth || 430;
+  canvas.width = displaySize * dpr;
+  canvas.height = displaySize * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  cellSize = displaySize / COLS;
+  draw();
+}
+
+function cellTopLeft(r, c) {
+  return [c * cellSize, r * cellSize];
+}
+
+function draw() {
+  const size = canvas.clientWidth || 430;
+  ctx.clearRect(0, 0, size, size);
+
+  // backdrop
+  ctx.fillStyle = '#0a0f17';
+  ctx.fillRect(0, 0, size, size);
+
+  // trail (visited path) glow
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  if (visitedTrail.length > 1) {
+    ctx.strokeStyle = 'rgba(0,229,160,0.35)';
+    ctx.lineWidth = Math.max(2, cellSize * 0.14);
+    ctx.beginPath();
+    for (let i = 0; i < visitedTrail.length; i++) {
+      const [r, c] = visitedTrail[i];
+      const x = c * cellSize + cellSize / 2;
+      const y = r * cellSize + cellSize / 2;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  // walls
+  ctx.strokeStyle = '#e9edf3';
+  ctx.lineWidth = Math.max(1.5, cellSize * 0.07);
+  ctx.beginPath();
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const [x, y] = cellTopLeft(r, c);
+      const cell = grid[r][c];
+      if (cell.N) { ctx.moveTo(x, y); ctx.lineTo(x + cellSize, y); }
+      if (cell.W) { ctx.moveTo(x, y); ctx.lineTo(x, y + cellSize); }
+      if (cell.S) { ctx.moveTo(x, y + cellSize); ctx.lineTo(x + cellSize, y + cellSize); }
+      if (cell.E) { ctx.moveTo(x + cellSize, y); ctx.lineTo(x + cellSize, y + cellSize); }
+    }
+  }
+  ctx.stroke();
+
+  // sealed crossings (from wrong answers) drawn in red-ish to show permanence
+  ctx.strokeStyle = '#ff5d72';
+  ctx.lineWidth = Math.max(2, cellSize * 0.09);
+  ctx.beginPath();
+  sealedWalls.forEach(w => {
+    const [x, y] = cellTopLeft(w.r, w.c);
+    if (w.dir === 'N') { ctx.moveTo(x, y); ctx.lineTo(x + cellSize, y); }
+    if (w.dir === 'W') { ctx.moveTo(x, y); ctx.lineTo(x, y + cellSize); }
+    if (w.dir === 'S') { ctx.moveTo(x, y + cellSize); ctx.lineTo(x + cellSize, y + cellSize); }
+    if (w.dir === 'E') { ctx.moveTo(x + cellSize, y); ctx.lineTo(x + cellSize, y + cellSize); }
+  });
+  ctx.stroke();
+
+  // gates (unsolved = gold glow, solved = faint green)
+  gates.forEach(g => {
+    const [x, y] = cellTopLeft(g.cell[0], g.cell[1]);
+    ctx.beginPath();
+    ctx.arc(x + cellSize/2, y + cellSize/2, cellSize * 0.28, 0, Math.PI*2);
+    if (g.cleared) {
+      ctx.fillStyle = 'rgba(0,229,160,0.25)';
+    } else {
+      ctx.fillStyle = 'rgba(255,209,102,0.85)';
+      ctx.shadowColor = 'rgba(255,209,102,0.6)';
+      ctx.shadowBlur = 8;
+    }
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  });
+
+  // start marker
+  {
+    const [x, y] = cellTopLeft(startCell[0], startCell[1]);
+    ctx.beginPath();
+    ctx.arc(x + cellSize/2, y + cellSize/2, cellSize*0.22, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(100,150,230,0.5)';
+    ctx.fill();
+  }
+
+  // goal marker (star)
+  {
+    const [x, y] = cellTopLeft(endCell[0], endCell[1]);
+    drawStar(x + cellSize/2, y + cellSize/2, cellSize*0.32, '#ffd166');
+  }
+
+  // player
+  {
+    const [x, y] = cellTopLeft(playerPos[0], playerPos[1]);
+    const cx = x + cellSize/2, cy = y + cellSize/2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, cellSize*0.26, 0, Math.PI*2);
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = 'rgba(0,229,160,0.8)';
+    ctx.shadowBlur = 12;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.arc(cx, cy, cellSize*0.13, 0, Math.PI*2);
+    ctx.fillStyle = '#0a0e14';
+    ctx.fill();
+  }
+}
+
+function drawStar(cx, cy, r, color) {
+  const spikes = 5;
+  const step = Math.PI / spikes;
+  ctx.beginPath();
+  for (let i = 0; i < spikes * 2; i++) {
+    const radius = i % 2 === 0 ? r : r * 0.45;
+    const angle = i * step - Math.PI/2;
+    const x = cx + Math.cos(angle) * radius;
+    const y = cy + Math.sin(angle) * radius;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.shadowColor = 'rgba(255,209,102,0.7)';
+  ctx.shadowBlur = 10;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
+/* ---------------- GAME STATE / MOVEMENT ---------------- */
+let sealedWalls = [];
+
+function resetGame() {
+  buildMaze();
+  placeGates();
+  playerPos = [...startCell];
+  visitedTrail = [[...startCell]];
+  sealedWalls = [];
+  stepCount = 0;
+  setbackCount = 0;
+  gatesCleared = 0;
+  awaitingGate = false;
+  document.getElementById('logFeed').innerHTML =
+    '<div class="log-entry info">Mochi is dropped at the maze entrance. Reach the star to complete the run. Trivia gates block six points along the way — answer right to pass, answer wrong and the route behind you seals shut while a new one opens.</div>';
+  updateStats();
+  resizeCanvas();
+}
+
+function logMsg(text, cls) {
+  const feed = document.getElementById('logFeed');
+  const div = document.createElement('div');
+  div.className = 'log-entry ' + (cls || '');
+  div.textContent = text;
+  feed.prepend(div);
+}
+
+function updateStats() {
+  document.getElementById('statSteps').textContent = stepCount;
+  document.getElementById('statGates').textContent = gatesCleared + '/' + gates.length;
+  document.getElementById('statSetbacks').textContent = setbackCount;
+  const idxInPath = truePath.findIndex(p => p[0]===playerPos[0] && p[1]===playerPos[1]);
+  const pct = idxInPath >= 0 ? Math.round((idxInPath / (truePath.length-1)) * 100) : null;
+  document.getElementById('progressLabel').textContent = (pct!==null ? pct : '—') + '% to goal';
+}
+
+function dirDelta(dir) {
+  if (dir === 'N') return [-1, 0];
+  if (dir === 'S') return [1, 0];
+  if (dir === 'E') return [0, 1];
+  if (dir === 'W') return [0, -1];
+}
+
+function oppositeDir(dir) {
+  return { N:'S', S:'N', E:'W', W:'E' }[dir];
+}
+
+function isSealed(r, c, dir) {
+  return sealedWalls.some(w => w.r===r && w.c===c && w.dir===dir);
+}
+
+function tryMove(dir) {
+  if (awaitingGate) return;
+  const [r, c] = playerPos;
+  const cell = grid[r][c];
+  if (cell[dir]) return; // wall present, can't move
+  if (isSealed(r, c, dir)) return; // sealed by a past wrong answer
+
+  const [dr, dc] = dirDelta(dir);
+  const nr = r + dr, nc = c + dc;
+  if (!inBounds(nr, nc)) return;
+
+  // check if a gate sits on the destination cell and isn't cleared yet
+  const gate = gates.find(g => g.cell[0]===nr && g.cell[1]===nc && !g.cleared);
+  if (gate) {
+    SFX.gate();
+    openGate(gate, dir);
+    return;
+  }
+
+  movePlayerTo(nr, nc);
+}
+
+function movePlayerTo(nr, nc) {
+  playerPos = [nr, nc];
+  visitedTrail.push([nr, nc]);
+  stepCount++;
+  SFX.move();
+  updateStats();
+  draw();
+  if (nr === endCell[0] && nc === endCell[1]) {
+    onWin();
+  }
+}
+
+/* ---------------- GATE LOGIC ---------------- */
+let pendingGateMove = null;
+
+function openGate(gate, dirAttempted) {
+  awaitingGate = true;
+  pendingGateMove = { gate, dir: dirAttempted };
+  const q = nextQuestion();
+  renderGateModal(q, gate);
+}
+
+function renderGateModal(q, gate) {
+  document.getElementById('gateQuestion').textContent = q.q;
+  const optWrap = document.getElementById('gateOptions');
+  optWrap.innerHTML = '';
+  const feedback = document.getElementById('gateFeedback');
+  feedback.textContent = '';
+  feedback.className = 'gate-feedback';
+  const continueBtn = document.getElementById('gateContinueBtn');
+  continueBtn.classList.remove('show');
+
+  const order = shuffle(q.options.map((opt, i) => ({ opt, i })));
+
+  order.forEach(({ opt, i }) => {
+    const btn = document.createElement('button');
+    btn.className = 'gate-option';
+    btn.textContent = opt;
+    btn.addEventListener('click', () => handleGateAnswer(i === q.correct, btn, q, gate));
+    optWrap.appendChild(btn);
+  });
+
+  document.getElementById('gateOverlay').classList.add('show');
+}
+
+function handleGateAnswer(isCorrect, btnEl, q, gate) {
+  const allBtns = document.querySelectorAll('.gate-option');
+  allBtns.forEach(b => b.disabled = true);
+
+  const feedback = document.getElementById('gateFeedback');
+  const continueBtn = document.getElementById('gateContinueBtn');
+
+  if (isCorrect) {
+    btnEl.classList.add('correct');
+    feedback.textContent = 'Correct — the gate unlocks.';
+    feedback.className = 'gate-feedback good';
+    gate.cleared = true;
+    gatesCleared++;
+    SFX.correct();
+    logMsg('Gate ' + (gate.id+1) + ' cleared: ' + q.q, 'good');
+    continueBtn.textContent = 'Continue';
+    continueBtn.onclick = () => {
+      closeGateModal();
+      movePlayerTo(pendingGateMove.gate.cell[0], pendingGateMove.gate.cell[1]);
+    };
+  } else {
+    btnEl.classList.add('wrong');
+    feedback.textContent = 'Not quite — Mochi falls back, and that route seals shut.';
+    feedback.className = 'gate-feedback bad';
+    SFX.wrong();
+    logMsg('Gate ' + (gate.id+1) + ' missed: ' + q.q, 'bad');
+    continueBtn.textContent = 'Fall back';
+    continueBtn.onclick = () => {
+      closeGateModal();
+      handleWrongAnswer(gate);
+    };
+  }
+  continueBtn.classList.add('show');
+}
+
+function closeGateModal() {
+  document.getElementById('gateOverlay').classList.remove('show');
+  awaitingGate = false;
+}
+
+function handleWrongAnswer(gate) {
+  setbackCount++;
+  SFX.setback();
+
+  // seal the crossing the player attempted (between current pos and gate cell)
+  const [r, c] = playerPos;
+  const dir = pendingGateMove.dir;
+  sealedWalls.push({ r, c, dir });
+  const opp = oppositeDir(dir);
+  const [dr, dc] = dirDelta(dir);
+  sealedWalls.push({ r: r+dr, c: c+dc, dir: opp });
+
+  // bounce player back a few cells along visited trail
+  const bounceSteps = Math.min(3, visitedTrail.length - 1);
+  for (let i = 0; i < bounceSteps; i++) {
+    if (visitedTrail.length > 1) visitedTrail.pop();
+  }
+  playerPos = [...visitedTrail[visitedTrail.length - 1]];
+
+  // carve a fresh connection: find an unconnected neighbor pair between
+  // the player's current region and the goal-side region, open it up
+  const rerouted = carveAlternateRoute();
+
+  // reshuffle remaining uncleared gates along the new path
+  if (rerouted) reshuffleRemainingGates();
+
+  updateStats();
+  draw();
+  if (rerouted) {
+    SFX.reroute();
+    logMsg('A new route has opened — gates reshuffled along the path.', 'info');
+  } else {
+    logMsg('The maze held firm — try moving toward an open passage.', 'info');
+  }
+}
+
+/* After a wrong answer reroutes the maze, redistribute all uncleared gates
+   evenly along the fresh path from the player's current position to the goal.
+   Cleared gates are left unchanged. */
+function reshuffleRemainingGates() {
+  // get the current forward path from player's position to end
+  const forwardPath = bfsPath(grid, playerPos, endCell);
+
+  // only place gates on cells ahead of player (exclude first 1 and last 1)
+  const usable = forwardPath.slice(1, forwardPath.length - 1);
+  if (usable.length < 1) return;
+
+  // collect uncleared gates
+  const pending = gates.filter(g => !g.cleared);
+  if (pending.length === 0) return;
+
+  // space them evenly across the usable forward stretch
+  const count = pending.length;
+  const chosen = new Set();
+
+  pending.forEach((gate, i) => {
+    let idx = Math.floor(((i + 1) / (count + 1)) * usable.length);
+    // avoid placing two gates on the same cell
+    while (chosen.has(idx) && idx < usable.length - 1) idx++;
+    chosen.add(idx);
+    gate.cell = usable[idx];
+  });
+}
+
+/* find a wall (an actual standing wall, not just a sealed-open passage) adjacent
+   to the player's currently reachable region, and knock it down to restore a
+   path toward the goal. Iterative with a safety cap -- breaches the
+   closest-to-goal frontier wall, rechecks connectivity, repeats if needed. */
+function getReachableFrom(pos) {
+  const reachable = new Set();
+  const queue = [pos];
+  reachable.add(pos.join(','));
+  while (queue.length) {
+    const [r, c] = queue.shift();
+    for (const n of neighborsOf(grid, r, c)) {
+      const key = n.join(',');
+      if (!isSealed(r, c, dirTo(r,c,n[0],n[1])) && !reachable.has(key)) {
+        reachable.add(key);
+        queue.push(n);
+      }
+    }
+  }
+  return reachable;
+}
+
+function carveAlternateRoute() {
+  let attempts = 0;
+  while (attempts < 50) {
+    attempts++;
+    const reachable = getReachableFrom(playerPos);
+    if (reachable.has(endCell.join(','))) {
+      truePath = bfsPath(grid, playerPos, endCell);
+      return true;
+    }
+
+    let candidates = [];
+    reachable.forEach(key => {
+      const [r, c] = key.split(',').map(Number);
+      ['N','S','E','W'].forEach(d => {
+        const [dr, dc] = dirDelta(d);
+        const nr = r+dr, nc = c+dc;
+        if (!inBounds(nr, nc)) return;
+        if (reachable.has(nr+','+nc)) return;
+        // only breach an actual standing wall -- sealed-but-open passages don't help
+        if (grid[r][c][d] !== true) return;
+        const distToGoal = Math.abs(nr-endCell[0]) + Math.abs(nc-endCell[1]);
+        candidates.push({ r, c, dir: d, nr, nc, distToGoal });
+      });
+    });
+
+    if (candidates.length === 0) return false;
+
+    candidates.sort((a,b) => a.distToGoal - b.distToGoal);
+    const pick = candidates[0];
+    grid[pick.r][pick.c][pick.dir] = false;
+    grid[pick.nr][pick.nc][oppositeDir(pick.dir)] = false;
+  }
+  return false;
+}
+
+function dirTo(r, c, nr, nc) {
+  if (nr === r-1) return 'N';
+  if (nr === r+1) return 'S';
+  if (nc === c+1) return 'E';
+  if (nc === c-1) return 'W';
+}
+
+function onWin() {
+  SFX.win();
+  document.getElementById('winSummary').textContent =
+    'Cleared in ' + stepCount + ' steps with ' + setbackCount + ' setback' + (setbackCount===1?'':'s') + '. All ' + gates.length + ' gates passed.';
+  document.getElementById('winOverlay').classList.add('show');
+  logMsg('Mochi reached the star. Run complete!', 'good');
+}
+
+/* ---------------- INPUT ---------------- */
+window.addEventListener('keydown', (e) => {
+  const map = { ArrowUp:'N', ArrowDown:'S', ArrowLeft:'W', ArrowRight:'E',
+                w:'N', s:'S', a:'W', d:'E', W:'N', S:'S', A:'W', D:'E' };
+  if (map[e.key]) {
+    e.preventDefault();
+    tryMove(map[e.key]);
+  }
+});
+
+document.querySelectorAll('.dpad button').forEach(btn => {
+  btn.addEventListener('click', () => tryMove(btn.dataset.dir));
+});
+
+document.getElementById('restartBtn').addEventListener('click', () => {
+  document.getElementById('winOverlay').classList.remove('show');
+  resetGame();
+});
+
+window.addEventListener('resize', resizeCanvas);
+
+/* ---------------- INIT ---------------- */
+resetGame();
+</script>
+</body>
+</html>
